@@ -141,13 +141,14 @@ class EncoderBlock(nn.Module):
         self.self_attention_block = self_attention_block
         self.feed_forward_block = feed_forward_block
         self.residual_connection = nn.ModuleList([ResidualConnection(dropout) for _ in range(2)])
+
     
     def forward(self , x , src_mask):
-        x = self.residual_connection[0](x , lambda:x self.self_attention_block(x , x , x , src_mask))
-        x = self.residual_connection[1](x , self.feed_forward_block)
-        return x
+            x = self.residual_connection[0](x , lambda:x self.self_attention_block(x , x , x , src_mask))
+            x = self.residual_connection[1](x , self.feed_forward_block)
+            return x
     
-    
+
 
 class Encoder(nn.Module):
     def __init__(self , layers : nn.ModuleList):
@@ -227,4 +228,46 @@ class Transformer(nn.Module):
 
     def projection(self, x):
         return self.projection_layer(x)
+     
+
+
+def build_transformer(src_vocab_size : int , tgt_vocab_size:int , src_seq_len:int ,tgt_seq_len:int , d_model:int=512 ,
+                      N:int=6 , h:int=8 ,dropout:float=0.1 , d_ff:int=2048) -> Transformer:
+    #create a embedding layer
+    src_embed = Input_embedding(src_vocab_size)
+    tgt_embed = Input_embedding(tgt_vocab_size)
+
+    # create a positional encoding
+    src_pos = PositionalEncoding(d_model,src_seq_len,dropout)
+    tgt_pos = PositionalEncoding(d_model,tgt_seq_len,dropout)
+
+    # create the encdoer blocks 
+    encoder_blocks = []
+    for _ in range(N):
+        encoder_self_attention_block = MultiHeadAttention(d_model , h , dropout)
+        feed_forward_block = FeedForwardBlock(d_model , d_ff , dropout)
+        encoder_block = EncoderBlock(encoder_self_attention_block , feed_forward_block , dropout)
+        encoder_blocks.append(encoder_block)
     
+    # create the decoder blocks
+    decoder_blockes = []
+    for _ in range(N):
+        decoder_self_attention_block = MultiHeadAttention(d_model , h , dropout)
+        decoder_cross_attention_block = MultiHeadAttention(d_model , h , dropout)
+        feed_forward_block = FeedForwardBlock(d_model , d_ff , dropout)
+        decoder_block = DecoderBlock(decoder_self_attention_block , decoder_cross_attention_block , feed_forward_block , dropout)   
+        decoder_blockes.append(decoder_block)
+    
+    encoder = Encoder(nn.ModuleList(encoder_blocks))
+    decoder = Decoder(nn.ModuleList(decoder_blockes))
+
+    projection_layer = ProjectionLayer(d_model , tgt_vocab_size)
+
+    transformer = Transformer(encoder , decoder , src_embed , tgt_embed , src_pos , tgt_pos , projection_layer)
+
+    for p in transformer.parameters():
+        if p.dim() > 1:
+            nn.init.xavier_uniform_(p)
+    
+    return transformer
+
