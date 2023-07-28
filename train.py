@@ -76,8 +76,7 @@ def get_model(config ,src_vocab_len , tgt_vocab_len):
 
 def train_model(config):
 
-    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    device = 'cpu'
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device : {device}")
 
 
