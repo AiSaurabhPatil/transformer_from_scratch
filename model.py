@@ -45,7 +45,7 @@ class PositionalEncoding(nn.Module):
         self.register_buffer('pe', pe)
 
     def forward(self, x):
-        x = x + (self.pe[: , :x.shape[1] , : ]).requires_grad(False)
+        x = x + (self.pe[: , :x.shape[1] , : ]).requires_grad_(False)
         return self.dropout(x)
 
 
@@ -99,13 +99,13 @@ class MultiHeadAttention(nn.Module):
         d_k = query.shape[-1]
 
         # ( batch , seq_len , d_model ) ----> ( batch ,h,seq_len , seq_len) 
-        attention_scores = (query @key.transpose(-2 , -1)) / np.sqrt(d_k)
-        if mask is not None:
-            attention_scores = attention_scores.masked_fill(mask == 0, -1e9)
-        attention_score = torch.softmax(attention_scores , dim = -1) # ( batch ,h, seq_len , seq_len )
+        attention_scores = (query @ key.transpose(-2 , -1)) / np.sqrt(d_k)
+        if mask is not None: 
+            attention_scores = attention_scores.masked_fill_(mask == 0, -1e9)
+        attention_scores = attention_scores.softmax(dim=-1) # ( batch ,h, seq_len , seq_len )
         if dropout is not None :
-            attention_score = dropout(attention_score)
-        return (attention_score @ value) , attention_score
+            attention_scores = dropout(attention_scores)
+        return (attention_scores @ value) , attention_scores
     
 
     def forward(self ,q,v,k ,mask):
@@ -128,11 +128,11 @@ class MultiHeadAttention(nn.Module):
 class ResidualConnection(nn.Module):
     def __init__(self , dropout: float):
         super().__init__()
-        self.dropout = dropout
+        self.dropout = nn.Dropout(dropout)
         self.norm = LayerNormalization()
 
     def forward(self, x,sublayer):
-        return self.dropout(sublayer(self.norm(x)))
+        return x + self.dropout(sublayer(self.norm(x)))
         
 
 class EncoderBlock(nn.Module):
@@ -144,7 +144,7 @@ class EncoderBlock(nn.Module):
 
     
     def forward(self , x , src_mask):
-            x = self.residual_connections[0](x, lambda x: self.self_attention_block(x, x, x, src_mask))
+            x = self.residual_connection[0](x, lambda x: self.self_attention_block(x, x, x, src_mask))
             x = self.residual_connection[1](x , self.feed_forward_block)
             return x
     
@@ -209,7 +209,7 @@ class Transformer(nn.Module):
         self.encoder = encoder 
         self.decoder = decoder 
         self.src_embed = src_embed
-        self.tgt_emb = tgt_embed
+        self.tgt_embed = tgt_embed
         self.src_pos = src_pos
         self.tgt_pos = tgt_pos
         self.projection_layer = projection_layer
@@ -234,8 +234,8 @@ class Transformer(nn.Module):
 def build_transformer(src_vocab_size : int , tgt_vocab_size:int , src_seq_len:int ,tgt_seq_len:int , d_model:int=512 ,
                       N:int=6 , h:int=8 ,dropout:float=0.1 , d_ff:int=2048) -> Transformer:
     #create a embedding layer
-    src_embed = Input_embedding(src_vocab_size)
-    tgt_embed = Input_embedding(tgt_vocab_size)
+    src_embed = Input_embedding(d_model,src_vocab_size)
+    tgt_embed = Input_embedding(d_model,tgt_vocab_size)
 
     # create a positional encoding
     src_pos = PositionalEncoding(d_model,src_seq_len,dropout)

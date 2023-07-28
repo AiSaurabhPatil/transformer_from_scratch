@@ -13,26 +13,26 @@ from pathlib import Path
 from model import build_transformer
 from config import get_config, get_weights_file_path
 from torch.utils.tensorboard import SummaryWriter
-import tqdm as tqdm
+from tqdm import tqdm
 def get_all_sentences(dataset , lang):
     for item in dataset:
         yield item['translation'][lang]
 
 def get_or_build_tokenizer(config , dataset , lang):
-    tokenizer_path = Path(config['tokenizer_path'].format(lang))
+    tokenizer_path = Path(config['tokenizer_file'].format(lang))
     if not Path.exists(tokenizer_path):
         tokenizer = Tokenizer(WordLevel(unk_token="[UNK]")) # replace the unknow token with UNK
         tokenizer.pre_tokenizer = Whitespace() 
         trainer = WordLevelTrainer(special_tokens = ["[PAD]", "[UNK]", "[EOS]", "[SOS]"], min_frequency = 2)
         tokenizer.train_from_iterator(get_all_sentences(dataset, lang) , trainer = trainer)
-        tokenizer.save(tokenizer_path)
+        tokenizer.save(str(tokenizer_path))
     
     else: 
-        tokenizer = Tokenizer.from_file(tokenizer_path)
+        tokenizer = Tokenizer.from_file(str(tokenizer_path))
     return tokenizer
 
 def get_dataset(config):
-    ds_raw = load_dataset('opus_books', f"{config['lang_src']-config['lang_tgt']}",split='train')
+    ds_raw = load_dataset('opus_books', f"{config['lang_src']}-{config['lang_tgt']}",split='train')
 
     ## building a tokenizer 
     tokenizer_src = get_or_build_tokenizer(config , ds_raw , config['lang_src'])
@@ -44,8 +44,8 @@ def get_dataset(config):
 
     train_dataset_raw , val_dataset_raw = random_split(ds_raw , [train_dataset_size , val_dataset_size])
 
-    train_dataset = BilingualDataset(train_dataset_raw , tokenizer_src , tokenizer_tgt , config['lang_src'] , config['lang_tgt'],config['seq_len'])
-    val_dataset = BilingualDataset(val_dataset_raw , tokenizer_src , tokenizer_tgt , config['lang_src'] , config['lang_tgt'],config['seq_len'])
+    train_dataset = BilingualDataset(train_dataset_raw, tokenizer_src, tokenizer_tgt, config['lang_src'], config['lang_tgt'], config['seq_len'])
+    val_dataset = BilingualDataset(val_dataset_raw, tokenizer_src, tokenizer_tgt, config['lang_src'], config['lang_tgt'], config['seq_len'])
 
     # find the max length of the sentences in source and target sentence
 
@@ -76,7 +76,8 @@ def get_model(config ,src_vocab_len , tgt_vocab_len):
 
 def train_model(config):
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = 'cpu'
     print(f"Using device : {device}")
 
 
@@ -105,7 +106,7 @@ def train_model(config):
         optimizer.load_state_dict(state['optimizer_state_dict'])
         global_step = state['global_step']
 
-    loss_fn = nn.CrossEntropyLoss(ignore_index = tokenizer_tgt.pad_token_id('[PAD]'),label_smoothing=0.1).to(device)
+    loss_fn = nn.CrossEntropyLoss(ignore_index = tokenizer_tgt.token_to_id('[PAD]'),label_smoothing=0.1).to(device)
 
     for epoch in range(initial_epoch, config['num_epochs']):
         model.train()
