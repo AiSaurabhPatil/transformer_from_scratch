@@ -32,7 +32,7 @@ def get_or_build_tokenizer(config , dataset , lang):
     return tokenizer
 
 def get_dataset(config):
-    ds_raw = load_dataset('opus_books', f'{config["lang_src"]-config["lang_tgt"]}',split='train')
+    ds_raw = load_dataset('opus_books', f"{config['lang_src']-config['lang_tgt']}",split='train')
 
     ## building a tokenizer 
     tokenizer_src = get_or_build_tokenizer(config , ds_raw , config['lang_src'])
